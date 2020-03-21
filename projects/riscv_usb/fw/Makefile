@@ -11,6 +11,7 @@ CFLAGS=-Wall -Os -march=rv32i -mabi=ilp32 -ffreestanding -flto -nostartfiles -fo
 HEADERS_common=\
 	config.h \
 	console.h \
+	hram.h \
 	led.h \
 	mini-printf.h \
 	spi.h \
@@ -22,6 +23,7 @@ HEADERS_common=\
 SOURCES_common=\
 	start.S \
 	console.c \
+	hram.c \
 	led.c \
 	mini-printf.c  \
 	spi.c \
