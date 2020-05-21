@@ -79,6 +79,61 @@ usb_dfu_rt_cb_reboot(void)
 }
 
 
+int clk_hi = 2008;
+int clk_lo = 2048;
+
+
+#define USB_RT_CLK_SET	((0 << 8) | (USB_REQ_TYPE_VENDOR | USB_REQ_RCPT_DEV))
+#define USB_RT_CLK_GET	((1 << 8) | (USB_REQ_TYPE_VENDOR | USB_REQ_RCPT_DEV | USB_REQ_READ))
+
+static bool
+_vendor_clk_ctrl_req(struct usb_ctrl_req *req, struct usb_xfer *xfer)
+{
+	int *v;
+
+	/* Device req */
+	if (USB_REQ_RCPT(req) != USB_REQ_RCPT_DEV)
+		return USB_FND_CONTINUE;
+
+	if (USB_REQ_TYPE(req) != USB_REQ_TYPE_VENDOR)
+		return USB_FND_CONTINUE;
+
+	switch (req->wIndex) {
+	case 0:  v = &clk_hi; break;
+	case 1:  v = &clk_lo; break;
+	default: return USB_FND_ERROR;
+	}
+
+	switch (req->wRequestAndType)
+	{
+	case USB_RT_CLK_SET:
+		*v = req->wValue;
+		xfer->len = 0;
+		break;
+
+	case USB_RT_CLK_GET:
+		xfer->len = 2;
+		xfer->data[0] = (*v     ) & 0xff;
+		xfer->data[1] = (*v >> 8) & 0xff;
+		break;
+
+	default:
+		return USB_FND_ERROR;
+	}
+
+	pdm_set(PDM_CLK_HI, true, clk_hi, false);
+	pdm_set(PDM_CLK_LO, true, clk_lo, false);
+
+	return USB_FND_SUCCESS;
+}
+
+static struct usb_fn_drv _clk_drv = {
+	.ctrl_req = _vendor_clk_ctrl_req,
+};
+
+
+
+
 static volatile uint32_t * const misc_regs = (void*)(MISC_BASE);
 
 void main()
@@ -103,14 +158,20 @@ void main()
 	pdm_set(PDM_E1_N,  true, 128 + d, false);
 
 	/* Setup clock tuning */
-	pdm_set(PDM_CLK_HI, true, 2048, false);
-	pdm_set(PDM_CLK_LO, false,   0, false);
+	pdm_set(PDM_CLK_HI, true, clk_hi, false);
+	pdm_set(PDM_CLK_LO, true, clk_lo, false);
 
 	/* Enable USB directly */
 	serial_no_init();
 	usb_init(&app_stack_desc);
 	usb_dfu_rt_init();
 	usb_e1_init();
+	usb_register_function_driver(&_clk_drv);
+
+	usb_connect();
+	e1_init(false);
+	e1_active = true;
+	led_state(true);
 
 	/* Main loop */
 	while (1)
